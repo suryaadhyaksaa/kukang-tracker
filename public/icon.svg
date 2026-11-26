@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <mask id="kukang-eye-cutout">
+      <rect width="200" height="200" fill="white" />
+      <ellipse cx="79" cy="89.5" rx="7.2" ry="5" transform="rotate(-22 79 89.5)" fill="black" />
+      <ellipse cx="121" cy="89.5" rx="7.2" ry="5" transform="rotate(22 121 89.5)" fill="black" />
+    </mask>
+  </defs>
+  <g mask="url(#kukang-eye-cutout)">
+    <!-- Bagian Kiri & Bawah (Metallic Gold) -->
+    <path
+      d="M 59 36.0
+         A 76 76 0 1 0 126 171.4
+         L 126 156.3
+         A 62 62 0 0 1 65 151.5
+         C 60 136, 61 116, 70 106
+         C 76 100, 88 101, 91 93
+         C 94 85, 86 77, 76 79
+         C 62 82, 50 99, 43.7 126
+         A 62 62 0 0 1 59 53.5
+         Z"
+      fill="#C9A244"
+    />
+    <!-- Bagian Atas & Kanan (Deep Crimson) -->
+    <path
+      d="M 67 31.5
+         A 76 76 0 0 1 158.9 148
+         L 139.2 148
+         C 141 131, 139 115, 130 106
+         C 124 100, 112 101, 109 93
+         C 106 85, 114 77, 124 79
+         C 138 82, 149 98, 154.8 129
+         A 62 62 0 0 0 67 47.5
+         Z"
+      fill="#A80D0D"
+    />
+  </g>
+</svg>

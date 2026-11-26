@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  touch-action: manipulation;
+}
+
+body {
+  background-color: #070506;
+  color: #f5f0f0;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(ellipse 60% 40% at 15% 10%, rgba(201, 162, 68, 0.11), transparent),
+    radial-gradient(ellipse 60% 45% at 85% 20%, rgba(168, 13, 13, 0.13), transparent);
+}
+
+/* Watermark Logo KUKANG EV terpusat di latar belakang seluruh halaman */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url("/icon.svg");
+  background-repeat: no-repeat;
+  background-position: center 52%;
+  background-size: min(74vw, 480px);
+  opacity: 0.06;
+  transform: translateZ(0);
+}
+
+.kukang-silk-overlay {
+  background-image: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    transparent 45%,
+    rgba(201, 162, 68, 0.02) 65%,
+    transparent 100%
+  );
+}
+
+/* Single-Layer GPU-Friendly Card dengan watermark sudut kanan bawah */
+.kukang-card {
+  background-color: rgba(18, 8, 9, 0.88);
+  background-image:
+    radial-gradient(65% 2px at 50% 0%, rgba(251, 191, 36, 0.9), transparent),
+    radial-gradient(50% 22px at 50% 0%, rgba(245, 158, 11, 0.18), transparent),
+    linear-gradient(155deg, rgba(18, 8, 9, 0.92) 0%, rgba(34, 16, 17, 0.88) 55%, rgba(54, 33, 33, 0.85) 100%);
+  border: 1px solid rgba(185, 28, 28, 0.28);
+  box-shadow: 0 8px 20px -10px rgba(0, 0, 0, 0.65);
+}
+
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .kukang-card {
+    box-shadow: none;
+  }
+
+  body::after {
+    background-size: 78vw;
+    opacity: 0.055;
+  }
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0.65;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page-enter {
+  animation: pageEnter 110ms ease-out forwards;
+}
+
+button,
+a {
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 70ms cubic-bezier(0.2, 0, 0, 1), background-color 100ms ease, border-color 100ms ease, opacity 100ms ease;
+}
+
+button:hover:not(:disabled),
+a:hover {
+  filter: brightness(1.06);
+}
+
+button:active:not(:disabled),
+a:active {
+  transform: scale(0.96);
+  filter: brightness(0.94);
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #070506;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c1517;
+  border-radius: 9999px;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  body::after {
+    display: none !important;
+  }
+  #printable-qr-poster,
+  #printable-qr-poster * {
+    visibility: visible;
+  }
+  #printable-qr-poster {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 2rem;
+  }
+}
