@@ -3,23 +3,29 @@ import React, { useId } from "react";
 export function KukangLogo({
   compact = false,
   showTagline = false,
+  hideTaglineOnMobile = false,
   variant = "color",
   size = "md",
 }: {
   compact?: boolean;
   showTagline?: boolean;
+  hideTaglineOnMobile?: boolean;
   variant?: "color" | "white";
   size?: "sm" | "md" | "lg";
 }) {
   const maskId = useId();
   const iconDimension =
-    size === "lg" ? "h-16 w-16" : size === "sm" ? "h-8 w-8" : "h-10 w-10";
+    size === "lg"
+      ? "h-14 w-14 sm:h-16 sm:w-16"
+      : size === "sm"
+      ? "h-8 w-8"
+      : "h-9 w-9 sm:h-10 sm:w-10";
 
   const goldFill = variant === "white" ? "#FFFFFF" : "#C9A244";
   const redFill = variant === "white" ? "#FFFFFF" : "#A80D0D";
 
   return (
-    <div className="flex items-center gap-3 select-none">
+    <div className="flex items-center gap-2.5 sm:gap-3 select-none shrink-0">
       <div
         className={`relative flex ${iconDimension} shrink-0 items-center justify-center rounded-xl bg-black p-1 border border-[#C9A244]/40 shadow-md shadow-black/70`}
       >
@@ -51,7 +57,6 @@ export function KukangLogo({
             </mask>
           </defs>
           <g mask={`url(#${maskId})`}>
-            {/* Bagian Kiri & Bawah (Metallic Gold) */}
             <path
               d="M 59 36.0
                  A 76 76 0 1 0 126 171.4
@@ -65,7 +70,6 @@ export function KukangLogo({
                  Z"
               fill={goldFill}
             />
-            {/* Bagian Atas & Kanan (Deep Crimson) */}
             <path
               d="M 67 31.5
                  A 76 76 0 0 1 158.9 148
@@ -83,17 +87,21 @@ export function KukangLogo({
       </div>
 
       {!compact && (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
-            <span className="font-heading text-base font-bold tracking-wider text-white">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="font-heading text-sm sm:text-base font-bold tracking-wider text-white">
               KUKANG <span className="text-[#DC2626]">EV</span>
             </span>
-            <span className="rounded bg-[#C9A244]/15 px-1.5 py-0.5 text-[10px] font-bold tracking-widest text-[#E5B94C] border border-[#C9A244]/40">
+            <span className="rounded bg-[#C9A244]/15 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-bold tracking-widest text-[#E5B94C] border border-[#C9A244]/40">
               ITERA
             </span>
           </div>
           {showTagline && (
-            <span className="text-[11px] tracking-wide text-[#D4AF37]/90">
+            <span
+              className={`${
+                hideTaglineOnMobile ? "hidden sm:block" : "block"
+              } truncate text-[10px] sm:text-[11px] tracking-wide text-[#D4AF37]/90`}
+            >
               Silent Drive, Powerful Impact
             </span>
           )}

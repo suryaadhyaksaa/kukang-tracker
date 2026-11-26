@@ -151,3 +151,13 @@ a:active {
     padding: 2rem;
   }
 }
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+}
+
+.font-heading {
+  font-family: var(--font-heading), system-ui, -apple-system, sans-serif;
+}

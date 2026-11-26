@@ -8,19 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      colors: {
-        kukang: {
-          bg: "#050816",
-          secondary: "#0F172A",
-          card: "#0B1120",
-          green: "#10B981",
-          cyan: "#06B6D4",
-          gold: "#F59E0B",
-        },
-      },
       fontFamily: {
-        sans: ["var(--font-inter)", "sans-serif"],
-        heading: ["var(--font-space-grotesk)", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "-apple-system", "sans-serif"],
+        heading: ["var(--font-heading)", "system-ui", "-apple-system", "sans-serif"],
       },
     },
   },
