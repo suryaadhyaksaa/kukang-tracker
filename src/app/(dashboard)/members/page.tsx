@@ -305,7 +305,7 @@ export default function MembersMasterPage() {
           >
             <option value="Technical">Technical Team</option>
             <option value="Non-Technical">Non-Technical Team</option>
-            <option value="Management">Administrasi & Principals</option>
+            <option value="Management">Administration & Fundraising</option>
           </select>
           <button
             type="submit"

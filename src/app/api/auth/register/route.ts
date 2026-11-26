@@ -90,7 +90,7 @@ export async function POST(request: Request) {
           angkatan,
           division_id: divisionId,
           position: "Staff",
-          membership_status: "active",
+          membership_status: body.membership_status === "internship" ? "internship" : "active",
         },
         { onConflict: "email" }
       );

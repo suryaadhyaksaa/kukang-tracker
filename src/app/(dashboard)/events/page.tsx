@@ -8,6 +8,7 @@ import {
   Clock,
   Trash2,
   AlertTriangle,
+  Users,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -16,8 +17,12 @@ import { formatJakartaDateTime, generateSecureEventToken } from "@/lib/utils";
 import { EventQRModal } from "@/components/events/EventQRModal";
 import type { Division, KukangEvent, UserRole } from "@/types/database";
 
+type ExtendedEvent = KukangEvent & {
+  target_membership?: "all" | "active" | "internship";
+};
+
 interface EventsCache {
-  events: KukangEvent[];
+  events: ExtendedEvent[];
   divisions: Division[];
   role: UserRole;
 }
@@ -26,11 +31,11 @@ export default function EventsPage() {
   const supabase = createClient();
   const cached = getCachedData<EventsCache>("events-page");
 
-  const [events, setEvents] = useState<KukangEvent[]>(cached?.events || []);
+  const [events, setEvents] = useState<ExtendedEvent[]>(cached?.events || []);
   const [divisions, setDivisions] = useState<Division[]>(cached?.divisions || []);
   const [role, setRole] = useState<UserRole>(cached?.role || "member");
-  const [selectedEvent, setSelectedEvent] = useState<KukangEvent | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<KukangEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<ExtendedEvent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ExtendedEvent | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -40,18 +45,20 @@ export default function EventsPage() {
   const [description, setDescription] = useState("");
   const [location, setLocation] = useState("Workshop Kukang EV ITERA");
   const [divisionId, setDivisionId] = useState("");
+  const [targetMembership, setTargetMembership] = useState<"all" | "active" | "internship">("all");
   const [eventDate, setEventDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [status, setStatus] = useState<"upcoming" | "ongoing" | "completed">(
-    "ongoing"
-  );
+  const [status, setStatus] = useState<"upcoming" | "ongoing" | "completed">("ongoing");
 
   const isAdmin = role === "admin" || role === "super_admin";
 
   async function loadData() {
     let resolvedRole: UserRole = role;
-    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user ?? null;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     if (user) {
       const { data: profile } = await supabase
@@ -73,7 +80,7 @@ export default function EventsPage() {
       supabase.from("divisions").select("*").order("name"),
     ]);
 
-    const nextEvents = (evData as KukangEvent[]) || [];
+    const nextEvents = (evData as ExtendedEvent[]) || [];
     const nextDivs = (divData as Division[]) || [];
 
     setEvents(nextEvents);
@@ -95,7 +102,10 @@ export default function EventsPage() {
     setSubmitting(true);
     setErrorMsg(null);
 
-    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user ?? null;
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user ?? null;
 
     const startIso = new Date(`${eventDate}T${startTime}:00+07:00`).toISOString();
     const endIso = new Date(`${eventDate}T${endTime}:00+07:00`).toISOString();
@@ -105,6 +115,7 @@ export default function EventsPage() {
       description,
       location,
       division_id: divisionId || null,
+      target_membership: targetMembership,
       event_date: eventDate,
       start_time: startIso,
       end_time: endIso,
@@ -133,7 +144,6 @@ export default function EventsPage() {
     const targetId = deleteTarget.id;
     const previousEvents = events;
 
-    // Optimistic UI update agar respons instan tanpa lag
     const updatedList = events.filter((ev) => ev.id !== targetId);
     setEvents(updatedList);
     setCachedData<EventsCache>("events-page", {
@@ -150,7 +160,6 @@ export default function EventsPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Kembalikan state jika gagal di server
         setEvents(previousEvents);
         setCachedData<EventsCache>("events-page", {
           events: previousEvents,
@@ -167,6 +176,31 @@ export default function EventsPage() {
     }
   }
 
+  function renderTargetBadge(target?: string) {
+    if (target === "active") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-950/60 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+          <Users className="h-3 w-3" />
+          Khusus Anggota Aktif
+        </span>
+      );
+    }
+    if (target === "internship") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-950/60 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+          <Users className="h-3 w-3" />
+          Khusus Magang / Internship
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-[#C89D3C]/35 bg-[#1B0E10] px-2 py-0.5 text-[10px] font-semibold text-[#E5B94C]">
+        <Users className="h-3 w-3" />
+        Semua Anggota (Aktif & Magang)
+      </span>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -174,7 +208,7 @@ export default function EventsPage() {
           Manajemen Kegiatan & QR Code
         </h1>
         <p className="text-sm text-stone-400">
-          Jadwal agenda tim, riset workshop, dan pembangkit QR Code absensi
+          Jadwal agenda tim, ketetapan peserta (Aktif / Magang), dan pembangkit QR Code
         </p>
       </div>
 
@@ -194,7 +228,7 @@ export default function EventsPage() {
           <span>Buat Kegiatan Baru</span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <input
             required
             placeholder="Nama Kegiatan"
@@ -220,6 +254,17 @@ export default function EventsPage() {
                 {d.name}
               </option>
             ))}
+          </select>
+          <select
+            value={targetMembership}
+            onChange={(e) =>
+              setTargetMembership(e.target.value as "all" | "active" | "internship")
+            }
+            className="rounded-xl border border-[#C89D3C]/50 bg-[#090607] px-3.5 py-2.5 text-xs font-medium text-[#F5D06F] focus:border-[#C89D3C] focus:outline-none"
+          >
+            <option value="all">Target: Semua (Aktif & Magang)</option>
+            <option value="active">Target: Khusus Anggota Aktif</option>
+            <option value="internship">Target: Khusus Magang / Internship</option>
           </select>
         </div>
 
@@ -287,7 +332,7 @@ export default function EventsPage() {
           {events.map((ev) => (
             <div
               key={ev.id}
-              className="flex flex-col justify-between rounded-2xl border border-[#3B181A] kukang-card p-5 space-y-4 hover:-translate-y-0.5"
+              className="flex flex-col justify-between rounded-2xl border border-[#3B181A] kukang-card p-5 space-y-4"
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -306,6 +351,8 @@ export default function EventsPage() {
                     {ev.qr_token}
                   </span>
                 </div>
+
+                <div>{renderTargetBadge(ev.target_membership)}</div>
 
                 <h3 className="font-heading text-base font-bold text-white">
                   {ev.title}
@@ -331,7 +378,7 @@ export default function EventsPage() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setSelectedEvent(ev)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#DC2626]/40 bg-[#9E0B0B]/20 py-2.5 text-xs font-semibold text-red-200 transition hover:bg-[#9E0B0B]/35"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#DC2626]/40 bg-[#9E0B0B]/20 py-2.5 text-xs font-semibold text-red-200 hover:bg-[#9E0B0B]/35"
                 >
                   <QrCode className="h-4 w-4 text-[#E5B94C]" />
                   <span>Tampilkan & Unduh QR Code</span>
@@ -342,7 +389,7 @@ export default function EventsPage() {
                     type="button"
                     onClick={() => setDeleteTarget(ev)}
                     title="Hapus Kegiatan"
-                    className="flex items-center justify-center rounded-xl border border-red-500/40 bg-red-950/50 p-2.5 text-red-300 transition hover:bg-red-900/60 hover:text-white"
+                    className="flex items-center justify-center rounded-xl border border-red-500/40 bg-red-950/50 p-2.5 text-red-300 hover:bg-red-900/60 hover:text-white"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

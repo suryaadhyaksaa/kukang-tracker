@@ -1,5 +1,5 @@
 export type UserRole = "super_admin" | "admin" | "member";
-export type MembershipStatus = "active" | "inactive" | "alumni";
+export type MembershipStatus = "active" | "internship" | "inactive" | "alumni";
 export type EventStatus = "upcoming" | "ongoing" | "completed";
 export type AttendanceStatus = "present" | "late" | "excused";
 export type VerificationStatus = "pending" | "approved" | "rejected";
@@ -62,6 +62,7 @@ export interface Member {
   membership_status: MembershipStatus;
   avatar_url: string | null;
   personal_qr_token: string;
+  target_membership?: "all" | "active" | "internship";
   created_at: string;
   updated_at: string;
   divisions?: Division | null;
@@ -79,6 +80,7 @@ export interface KukangEvent {
   division_id: string | null;
   status: EventStatus;
   qr_token: string;
+  target_membership?: "all" | "active" | "internship";
   qr_active_from: string;
   qr_active_until: string;
   is_qr_manually_disabled: boolean;
@@ -100,6 +102,7 @@ export interface AttendanceRecord {
   event_title_snapshot: string;
   attendance_date: string;
   check_in_time: string;
+  member_status_snapshot?: "active" | "internship" | string;
   status: AttendanceStatus;
   check_in_method: string;
   excel_sync_status: SyncStatus;

@@ -11,6 +11,7 @@ import {
   Phone,
   Calendar,
   Layers,
+  BadgeCheck,
   AlertCircle,
   UserPlus,
 } from "lucide-react";
@@ -28,6 +29,7 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
   const [fullName, setFullName] = useState("");
   const [nim, setNim] = useState("");
   const [angkatan, setAngkatan] = useState(2024);
+  const [membershipStatus, setMembershipStatus] = useState<"internship" | "active">("internship");
   const [divisionId, setDivisionId] = useState(divisions[0]?.id || "");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -61,6 +63,7 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
           full_name: fullName,
           nim,
           angkatan,
+          membership_status: membershipStatus,
           division_id: divisionId || null,
           phone,
           email,
@@ -96,7 +99,7 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
   }
 
   return (
-    <div className="kukang-card w-full max-w-lg rounded-2xl p-7 sm:p-8 shadow-2xl">
+    <div className="kukang-card w-full max-w-lg rounded-2xl p-6 sm:p-8 shadow-2xl">
       <div className="mb-6 flex flex-col items-center text-center">
         <KukangLogo showTagline size="lg" />
         <h1 className="mt-5 font-heading text-2xl font-bold text-white">
@@ -154,6 +157,25 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-stone-300">
+              Status Keanggotaan
+            </label>
+            <div className="relative">
+              <BadgeCheck className="absolute left-3.5 top-3 h-4 w-4 text-[#E5B94C]" />
+              <select
+                value={membershipStatus}
+                onChange={(e) =>
+                  setMembershipStatus(e.target.value as "internship" | "active")
+                }
+                className="w-full rounded-xl border border-[#4A2022] bg-[#090607] py-2.5 pl-10 pr-3 text-xs text-white focus:border-[#C89D3C] focus:outline-none"
+              >
+                <option value="internship">Magang / Internship</option>
+                <option value="active">Anggota Aktif</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-stone-300">
               Angkatan
             </label>
             <div className="relative">
@@ -169,10 +191,36 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
               />
             </div>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-stone-300">
+              Divisi / Bagian Kukang EV
+            </label>
+            <div className="relative">
+              <Layers className="absolute left-3.5 top-3 h-4 w-4 text-stone-500" />
+              <select
+                value={divisionId}
+                onChange={(e) => setDivisionId(e.target.value)}
+                className="w-full rounded-xl border border-[#4A2022] bg-[#090607] py-2.5 pl-10 pr-3 text-xs text-white focus:border-[#C89D3C] focus:outline-none"
+              >
+                {divisions.length === 0 ? (
+                  <option value="">Umum / Belum Ditentukan</option>
+                ) : (
+                  divisions.map((div) => (
+                    <option key={div.id} value={div.id}>
+                      {div.name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-stone-300">
-              Nomor WhatsApp (Opsional)
+              Nomor WhatsApp
             </label>
             <div className="relative">
               <Phone className="absolute left-3.5 top-3 h-4 w-4 text-stone-500" />
@@ -184,30 +232,6 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
                 className="w-full rounded-xl border border-[#4A2022] bg-[#090607] py-2.5 pl-10 pr-3 text-xs text-white placeholder-stone-500 focus:border-[#C89D3C] focus:outline-none"
               />
             </div>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-stone-300">
-            Divisi Kukang EV
-          </label>
-          <div className="relative">
-            <Layers className="absolute left-3.5 top-3 h-4 w-4 text-stone-500" />
-            <select
-              value={divisionId}
-              onChange={(e) => setDivisionId(e.target.value)}
-              className="w-full rounded-xl border border-[#4A2022] bg-[#090607] py-2.5 pl-10 pr-3 text-xs text-white focus:border-[#C89D3C] focus:outline-none"
-            >
-              {divisions.length === 0 ? (
-                <option value="">Umum / Belum Ditentukan</option>
-              ) : (
-                divisions.map((div) => (
-                  <option key={div.id} value={div.id}>
-                    {div.name}
-                  </option>
-                ))
-              )}
-            </select>
           </div>
         </div>
 
@@ -269,7 +293,7 @@ export function RegisterForm({ divisions }: { divisions: DivisionOption[] }) {
         <button
           type="submit"
           disabled={loading}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9E0B0B] via-[#B91C1C] to-[#C89D3C] py-3 text-sm font-bold text-white shadow-lg shadow-black/50 transition hover:brightness-110 disabled:opacity-50"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9E0B0B] via-[#B91C1C] to-[#C89D3C] py-3 text-sm font-bold text-white shadow-lg shadow-black/50 hover:brightness-110 disabled:opacity-50"
         >
           <UserPlus className="h-4 w-4" />
           <span>{loading ? "Mendaftarkan Akun..." : "Daftar & Masuk"}</span>
