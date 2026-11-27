@@ -186,13 +186,17 @@ export async function POST(request: Request) {
       member_id: member.id,
       check_in_time: nowIso,
       nim_snapshot: resolvedNim,
+      member_name_snapshot: resolvedName,
+      division_name_snapshot: resolvedDivision,
       member_status_snapshot: memberStatus,
+      event_title_snapshot: String(event.title || "-"),
+      event_date_snapshot: String(event.event_date || nowIso.slice(0, 10)),
     };
 
     let inserted = null;
     let insertErr = null;
 
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       const res = await adminDb
         .from("attendance")
         .insert(insertPayload)
@@ -217,7 +221,7 @@ export async function POST(request: Request) {
         const col = nullColMatch[1];
         if (col.includes("nim")) insertPayload[col] = resolvedNim;
         else if (col.includes("name")) insertPayload[col] = resolvedName;
-        else if (col.includes("division")) insertPayload[col] = resolvedDivision;
+        else if (col.includes("division")) insertPayload[col] = resolvedDivision; else if (col.includes("title")) insertPayload[col] = String(event.title || "-"); else if (col.includes("date")) insertPayload[col] = String(event.event_date || nowIso.slice(0, 10));
         else insertPayload[col] = "-";
         continue;
       }
