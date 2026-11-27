@@ -1,4 +1,4 @@
-const CACHE_NAME = "kukang-ev-static-v1";
+const CACHE_NAME = "kukang-ev-v20261127083219";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
