@@ -120,6 +120,8 @@ export default function EventsPage() {
       start_time: startIso,
       end_time: endIso,
       qr_token: generateSecureEventToken(),
+      qr_active_from: startIso,
+      qr_active_until: endIso,
       status,
       created_by: user?.id ?? null,
     });
