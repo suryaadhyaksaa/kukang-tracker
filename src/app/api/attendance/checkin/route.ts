@@ -209,7 +209,7 @@ export async function POST(request: Request) {
       if (!insertErr) break;
 
       // Jika ada kolom opsional yang belum ada di tabel, hapus dari payload lalu coba lagi
-      const missingColMatch = insertErr.message?.match(/column "([^"]+)" of relation "attendance" does not exist/i);
+      const missingColMatch = insertErr.message?.match(/Could not find the '([^']+)' column of 'attendance'/i) || insertErr.message?.match(/column "([^"]+)" of relation "attendance" does not exist/i);
       if (missingColMatch) {
         delete insertPayload[missingColMatch[1]];
         continue;
