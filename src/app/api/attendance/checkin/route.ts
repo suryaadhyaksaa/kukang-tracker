@@ -1,248 +1,237 @@
 import { NextResponse } from "next/server";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createAdminSupabase } from "@/lib/supabase/admin";
-import { getJakartaNow } from "@/lib/utils";
-import { writeActivityLog } from "@/lib/audit";
-import { syncRowToExcelOnline } from "@/lib/excel/graph-client";
 
 export async function POST(request: Request) {
   try {
     const supabase = await createServerSupabase();
     const {
-      data: { user },
-    } = await supabase.auth.getUser();
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (!user) {
+    if (!session?.user) {
       return NextResponse.json(
-        { error: "Sesi tidak valid. Silakan login terlebih dahulu." },
+        { error: "Sesi login berakhir. Silakan login kembali sebelum melakukan absensi." },
         { status: 401 }
       );
     }
 
-    const body = await request.json();
-    const qrToken = String(body?.qr_token || "").trim();
+    const body = await request.json().catch(() => ({}));
+    const token = String(body.token || body.qr_token || body.code || "").trim();
+    const eventId = String(body.event_id || body.eventId || "").trim();
 
-    if (!qrToken) {
+    if (!token && !eventId) {
       return NextResponse.json(
-        { error: "Token QR kegiatan tidak ditemukan." },
+        { error: "Token QR atau ID kegiatan tidak valid." },
         { status: 400 }
       );
     }
 
     const adminDb = createAdminSupabase();
+    const user = session.user;
 
-    // 1. Ambil profil & data anggota terverifikasi dari akun login (anti-spoofing)
+    // 1. Ambil atau sinkronkan data profil & anggota secara otomatis
     const { data: profile } = await adminDb
       .from("profiles")
-      .select("id, full_name, role, is_active")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile || !profile.is_active) {
-      return NextResponse.json(
-        { error: "Akun pengguna tidak aktif atau tidak ditemukan." },
-        { status: 403 }
-      );
-    }
-
-    const { data: member } = await adminDb
-      .from("members")
-      .select("*, divisions(name)")
-      .eq("profile_id", user.id)
-      .single();
-
-    if (!member) {
-      return NextResponse.json(
-        {
-          error:
-            "Akun Anda belum tertaut ke Master Data Anggota Kukang EV. Hubungi Admin untuk menautkan NIM/Email Anda.",
-        },
-        { status: 403 }
-      );
-    }
-
-    if ((String(member.membership_status) !== "active" && String(member.membership_status) !== "internship")) {
-      return NextResponse.json(
-        { error: "Status keanggotaan Anda tidak aktif." },
-        { status: 403 }
-      );
-    }
-
-    // 2. Validasi Event & QR Code
-    const { data: event } = await adminDb
-      .from("events")
       .select("*")
-      .eq("qr_token", qrToken)
-      .single();
+      .eq("id", user.id)
+      .maybeSingle();
 
-    if (!event) {
+    let { data: member } = await adminDb
+      .from("members")
+      .select("*")
+      .eq("profile_id", user.id)
+      .maybeSingle();
+
+    // Jika akun belum tertaut di tabel members, tautkan / buat otomatis dari profil
+    if (!member) {
+      const nimFromProfile = profile?.nim || user.user_metadata?.nim || null;
+      if (nimFromProfile) {
+        const { data: existingByNim } = await adminDb
+          .from("members")
+          .select("*")
+          .eq("nim", String(nimFromProfile))
+          .maybeSingle();
+
+        if (existingByNim) {
+          const { data: linked } = await adminDb
+            .from("members")
+            .update({ profile_id: user.id })
+            .eq("id", existingByNim.id)
+            .select("*")
+            .single();
+          member = linked || existingByNim;
+        }
+      }
+
+      if (!member) {
+        const initialStatus =
+          user.user_metadata?.membership_status === "internship"
+            ? "internship"
+            : "active";
+
+        const { data: createdMember, error: createMemberErr } = await adminDb
+          .from("members")
+          .insert({
+            profile_id: user.id,
+            full_name:
+              profile?.full_name ||
+              user.user_metadata?.full_name ||
+              user.email?.split("@")[0] ||
+              "Anggota Kukang EV",
+            nim: String(nimFromProfile || `NIM-${user.id.slice(0, 8)}`),
+            angkatan: Number(profile?.angkatan || user.user_metadata?.angkatan || 2024),
+            division_id: profile?.division_id || user.user_metadata?.division_id || null,
+            phone: profile?.phone || user.user_metadata?.phone || null,
+            membership_status: initialStatus,
+          })
+          .select("*")
+          .single();
+
+        if (createMemberErr || !createdMember) {
+          return NextResponse.json(
+            { error: "Data anggota belum sinkron. Hubungi pengurus untuk aktivasi akun." },
+            { status: 404 }
+          );
+        }
+        member = createdMember;
+      }
+    }
+
+    // 2. Pastikan status keanggotaan otomatis aktif / internship (tidak pernah kosong)
+    let memberStatus = String(member.membership_status || "").toLowerCase();
+    if (!memberStatus || memberStatus === "inactive") {
+      memberStatus =
+        user.user_metadata?.membership_status === "internship"
+          ? "internship"
+          : "active";
+
+      await adminDb
+        .from("members")
+        .update({ membership_status: memberStatus })
+        .eq("id", member.id);
+    }
+
+    if (memberStatus !== "active" && memberStatus !== "internship") {
       return NextResponse.json(
-        { error: "QR Code tidak dikenali atau kegiatan tidak ditemukan." },
-        { status: 404 }
+        { error: `Status keanggotaan Anda (${memberStatus}) tidak dapat melakukan absensi.` },
+        { status: 403 }
       );
     }
 
-    if (event.is_qr_manually_disabled) {
+    // 3. Cari data kegiatan berdasarkan token QR atau ID kegiatan
+    let eventQuery = adminDb.from("events").select("*");
+    if (token) {
+      eventQuery = eventQuery.eq("qr_token", token);
+    } else {
+      eventQuery = eventQuery.eq("id", eventId);
+    }
+
+    const { data: event, error: eventErr } = await eventQuery.maybeSingle();
+
+    if (eventErr || !event) {
       return NextResponse.json(
-        { error: "QR Code absensi telah dinonaktifkan secara manual oleh Admin." },
-        { status: 403 }
+        { error: "QR Code kegiatan tidak ditemukan atau sudah tidak berlaku." },
+        { status: 404 }
       );
     }
 
     if (event.status === "completed") {
       return NextResponse.json(
-        { error: "Kegiatan ini sudah berstatus Completed." },
-        { status: 403 }
+        { error: "Sesi absensi untuk kegiatan ini sudah ditutup." },
+        { status: 400 }
       );
     }
 
-    // 3. Validasi Rentang Waktu QR di Server (Zona Waktu Asia/Jakarta)
-    const serverNow = getJakartaNow();
-    const activeFromMs = new Date(event.qr_active_from).getTime();
-    const activeUntilMs = new Date(event.qr_active_until).getTime();
-
-    if (serverNow.epochMs < activeFromMs) {
-      return NextResponse.json(
-        { error: "Sesi absensi QR Code belum dibuka oleh Admin." },
-        { status: 403 }
-      );
-    }
-
-    if (serverNow.epochMs > activeUntilMs) {
-      return NextResponse.json(
-        { error: "QR Code absensi sudah kedaluwarsa." },
-        { status: 403 }
-      );
-    }
-
-    // 4. Cek Duplikasi Kehadiran
-        const memberStatus = String(member?.membership_status || "active").toLowerCase();
-    const targetMembership = String((event as Record<string, unknown>)?.target_membership || "all").toLowerCase();
+    // 4. Validasi ketetapan peserta kegiatan (Semua / Anggota Tetap / Anggota Magang)
+    const targetMembership = String(event.target_membership || "all").toLowerCase();
     if (targetMembership === "active" && memberStatus !== "active") {
       return NextResponse.json(
-        { error: "Kegiatan ini khusus untuk Anggota Tetap / Aktif KUKANG EV." },
+        { error: "Kegiatan ini dikhususkan bagi Anggota Tetap / Aktif KUKANG EV." },
         { status: 403 }
       );
     }
     if (targetMembership === "internship" && memberStatus !== "internship") {
       return NextResponse.json(
-        { error: "Kegiatan ini khusus untuk Anggota Magang / Internship KUKANG EV." },
+        { error: "Kegiatan ini dikhususkan bagi Anggota Magang / Internship KUKANG EV." },
         { status: 403 }
       );
     }
 
+    // 5. Cegah duplikasi absensi pada kegiatan yang sama
     const { data: existingAttendance } = await adminDb
       .from("attendance")
       .select("id, check_in_time")
-      .eq("member_id", member.id)
       .eq("event_id", event.id)
+      .eq("member_id", member.id)
       .maybeSingle();
 
     if (existingAttendance) {
+      return NextResponse.json({
+        success: true,
+        alreadyCheckedIn: true,
+        message: `Kehadiran Anda pada "${event.title}" sudah tercatat sebelumnya.`,
+        attendance: existingAttendance,
+      });
+    }
+
+    // 6. Simpan otomatis data absensi ke Supabase
+    const nowIso = new Date().toISOString();
+    let { data: inserted, error: insertErr } = await adminDb
+      .from("attendance")
+      .insert({
+        event_id: event.id,
+        member_id: member.id,
+        check_in_time: nowIso,
+        member_status_snapshot: memberStatus,
+      })
+      .select("*")
+      .single();
+
+    // Fallback otomatis jika kolom snapshot belum ada di skema lama
+    if (insertErr && insertErr.message?.includes("member_status_snapshot")) {
+      const retry = await adminDb
+        .from("attendance")
+        .insert({
+          event_id: event.id,
+          member_id: member.id,
+          check_in_time: nowIso,
+        })
+        .select("*")
+        .single();
+      inserted = retry.data;
+      insertErr = retry.error;
+    }
+
+    if (insertErr) {
       return NextResponse.json(
-        {
-          error: "Anda sudah melakukan check-in pada kegiatan ini sebelumnya.",
-          attendance_id: existingAttendance.id,
-        },
-        { status: 409 }
+        { error: `Gagal mencatat absensi: ${insertErr.message}` },
+        { status: 500 }
       );
     }
 
-    // Tentukan status present vs late (toleransi 15 menit setelah start_time)
-    const eventStartMs = new Date(event.start_time).getTime();
-    const isLate = serverNow.epochMs > eventStartMs + 15 * 60 * 1000;
-    const attendanceStatus = isLate ? "late" : "present";
-    const divisionName =
-      (member.divisions as { name?: string } | null)?.name || "Umum";
-
-    // 5. Simpan Kehadiran ke PostgreSQL
-    const { data: insertedAttendance, error: insertError } = await adminDb
-      .from("attendance")
+    // 7. Catat riwayat aktivitas secara otomatis (opsional, non-blocking)
+    await adminDb
+      .from("activity_logs")
       .insert({
-        member_id: member.id,
-        event_id: event.id,
-        member_status_snapshot: member?.membership_status || "active",
-        nim_snapshot: member.nim,
-        member_name_snapshot: member.full_name,
-        position_snapshot: member.position,
-        division_name_snapshot: divisionName,
-        event_title_snapshot: event.title,
-        attendance_date: serverNow.date,
-        check_in_time: serverNow.iso,
-        status: attendanceStatus,
-        check_in_method: "qr_scan",
-        excel_sync_status: "pending",
+        user_id: user.id,
+        action: "ATTENDANCE_CHECKIN",
+        description: `${member.full_name} (${
+          memberStatus === "internship" ? "Magang" : "Anggota Tetap"
+        }) check-in pada ${event.title}`,
       })
-      .select()
-      .single();
-
-    if (insertError) {
-      if (insertError.code === "23505") {
-        return NextResponse.json(
-          { error: "Duplikasi check-in terdeteksi oleh database." },
-          { status: 409 }
-        );
-      }
-      throw insertError;
-    }
-
-    // 6. Catat Audit Log
-    await writeActivityLog({
-      actorProfileId: user.id,
-      actorName: member.full_name,
-      actorRole: profile.role,
-      actionType: "CHECK_IN",
-      entityType: "attendance",
-      entityId: insertedAttendance.id,
-      description: `${member.full_name} (${member.nim}) melakukan check-in pada kegiatan "${event.title}" (${serverNow.time})`,
-      metadata: {
-        event_id: event.id,
-        member_status_snapshot: member?.membership_status || "active",
-        nim: member.nim,
-        status: attendanceStatus,
-      },
-    });
-
-    // 7. Sinkronisasi Otomatis ke Microsoft Excel Online (AttendanceTable)
-    const syncResult = await syncRowToExcelOnline({
-      idempotencyKey: `attendance:${insertedAttendance.id}:insert`,
-      targetTable: "AttendanceTable",
-      recordId: insertedAttendance.id,
-      sourceTableToUpdate: "attendance",
-      rowValues: [
-        insertedAttendance.id,
-        member.id,
-        member.nim,
-        member.full_name,
-        member.position,
-        divisionName,
-        event.id,
-        event.title,
-        serverNow.date,
-        serverNow.time,
-        attendanceStatus,
-        serverNow.iso,
-      ],
-      payloadObject: {
-        attendance_id: insertedAttendance.id,
-        nim: member.nim,
-        member_name: member.full_name,
-        event_title: event.title,
-        check_in_time_wib: serverNow.time,
-      },
-    });
+      .then(() => null, () => null);
 
     return NextResponse.json({
       success: true,
-      message: "Check-in berhasil dicatat!",
-      attendance: insertedAttendance,
-      jakarta_time: serverNow.time,
-      excel_sync: syncResult,
+      message: `Check-in berhasil! Kehadiran Anda pada "${event.title}" telah tersimpan.`,
+      attendance: inserted,
+      data: inserted,
     });
   } catch (err) {
-    console.error("[CHECKIN_API_ERROR]", err);
+    console.error("[AUTO_CHECKIN_ERROR]", err);
     return NextResponse.json(
-      { error: "Terjadi kesalahan internal saat memproses absensi." },
+      { error: "Terjadi gangguan server saat memproses absensi." },
       { status: 500 }
     );
   }
