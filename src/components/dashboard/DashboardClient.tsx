@@ -179,7 +179,7 @@ export function DashboardClient({
 
   // KPI Metrics
   const activeMembersCount = initialMembers.filter(
-    (m) => m.membership_status === "active"
+    (m) => ["active", "internship"].includes(String(m.membership_status || ""))
   ).length;
   const totalEventsCount = initialEvents.length;
   const totalAttendanceCount = filteredAttendance.length;
