@@ -5,12 +5,16 @@ import {
   Download,
   FileSpreadsheet,
   Filter,
-  Users,
   UserCheck,
   GraduationCap,
+  Layers,
+  Trash2,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatJakartaDateTime } from "@/lib/utils";
+import type { UserRole } from "@/types/database";
 
 interface AttendancePreviewRow {
   id: string;
@@ -43,17 +47,39 @@ export default function ReportsPage() {
 
   const [rows, setRows] = useState<AttendancePreviewRow[]>([]);
   const [events, setEvents] = useState<EventOption[]>([]);
+  const [role, setRole] = useState<UserRole>("member");
   const [loading, setLoading] = useState(true);
 
-  // Filter state
   const [membership, setMembership] = useState<"all" | "active" | "internship">("all");
   const [eventId, setEventId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  const [deleteTarget, setDeleteTarget] = useState<AttendancePreviewRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const isAdmin = role === "admin" || role === "super_admin";
+
   useEffect(() => {
     async function loadPreview() {
       setLoading(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
+        if (profile?.role) {
+          setRole(profile.role as UserRole);
+        }
+      }
+
       const [{ data: attData }, { data: evData }] = await Promise.all([
         supabase
           .from("attendance")
@@ -123,7 +149,17 @@ export default function ReportsPage() {
       "internship"
   ).length;
 
-  function triggerDownload(targetMembership: "all" | "active" | "internship") {
+  function triggerExcelMultiSheetDownload() {
+    const params = new URLSearchParams();
+    if (eventId) params.set("eventId", eventId);
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+
+    const query = params.toString();
+    window.location.href = `/api/reports/export-xlsx${query ? `?${query}` : ""}`;
+  }
+
+  function triggerCsvDownload(targetMembership: "all" | "active" | "internship") {
     const params = new URLSearchParams();
     params.set("membership", targetMembership);
     if (eventId) params.set("eventId", eventId);
@@ -133,82 +169,135 @@ export default function ReportsPage() {
     window.location.href = `/api/reports/export?${params.toString()}`;
   }
 
+  async function handleConfirmDeleteAttendance() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setFeedbackMsg(null);
+
+    const targetId = deleteTarget.id;
+    const previousRows = rows;
+
+    setRows(rows.filter((r) => r.id !== targetId));
+    setDeleteTarget(null);
+
+    try {
+      const res = await fetch(`/api/attendance/${targetId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setRows(previousRows);
+        setFeedbackMsg({
+          type: "error",
+          text: data.error || "Gagal menghapus data absensi.",
+        });
+      } else {
+        setFeedbackMsg({
+          type: "success",
+          text: data.message || "Data absensi berhasil dihapus.",
+        });
+      }
+    } catch {
+      setRows(previousRows);
+      setFeedbackMsg({
+        type: "error",
+        text: "Gagal terhubung ke server saat menghapus absensi.",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-heading text-2xl font-bold text-white">
-          Export & Laporan Absensi CSV
+          Export & Laporan Absensi
         </h1>
         <p className="text-sm text-stone-400">
-          Unduh rekap absensi terpisah untuk Anggota Tetap (Aktif) dan Anggota Magang (Internship)
+          Kelola rekap kehadiran, hapus absensi yang tidak valid, dan unduh laporan Excel (.xlsx) / CSV
         </p>
       </div>
 
-      {/* Ringkasan Cepat & Tombol Unduh Terpisah */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="kukang-card rounded-2xl p-5 flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-stone-400">Absensi Anggota Tetap</p>
-              <p className="mt-1 font-heading text-2xl font-bold text-emerald-400">
-                {activeCount} <span className="text-xs font-normal text-stone-400">rekaman</span>
-              </p>
-            </div>
+      {feedbackMsg && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-xs ${
+            feedbackMsg.type === "success"
+              ? "border-emerald-500/40 bg-emerald-950/60 text-emerald-200"
+              : "border-red-500/40 bg-red-950/60 text-red-200"
+          }`}
+        >
+          {feedbackMsg.text}
+        </div>
+      )}
+
+      {/* Kartu Utama Excel Multi-Sheet (1 File, Beda Sheet) */}
+      <div className="kukang-card rounded-2xl border border-[#C89D3C]/50 p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1.5">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#C89D3C]/40 bg-[#C89D3C]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#F5D06F]">
+            <Layers className="h-3.5 w-3.5" />
+            <span>1 File Excel • 3 Sheet Terpisah</span>
+          </div>
+          <h2 className="font-heading text-lg font-bold text-white">
+            Workbook Excel Multi-Sheet (.xlsx)
+          </h2>
+          <p className="text-xs text-stone-300">
+            Otomatis memisahkan data ke dalam <strong className="text-emerald-300">Sheet 1: Anggota Tetap</strong> ({activeCount}),{" "}
+            <strong className="text-amber-300">Sheet 2: Anggota Magang</strong> ({internshipCount}), dan{" "}
+            <strong className="text-white">Sheet 3: Rekap Gabungan</strong> ({rows.length}).
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={triggerExcelMultiSheetDownload}
+          className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9E0B0B] via-[#B91C1C] to-[#C89D3C] px-5 py-3 text-xs sm:text-sm font-bold text-white shadow-lg shadow-black/50 hover:brightness-110"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          <span>Unduh 1 File Excel (.xlsx)</span>
+        </button>
+      </div>
+
+      {/* Opsi Unduhan CSV Terpisah */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="kukang-card rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/50 p-2.5 text-emerald-400">
               <UserCheck className="h-5 w-5" />
             </div>
+            <div>
+              <p className="text-xs font-bold text-white">CSV Anggota Tetap</p>
+              <p className="text-[11px] text-stone-400">{activeCount} rekaman kehadiran</p>
+            </div>
           </div>
           <button
             type="button"
-            onClick={() => triggerDownload("active")}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/40 py-2.5 text-xs font-bold text-emerald-300 hover:bg-emerald-900/50"
+            onClick={() => triggerCsvDownload("active")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/40 bg-emerald-950/40 px-3.5 py-2 text-xs font-semibold text-emerald-300 hover:bg-emerald-900/50"
           >
-            <Download className="h-4 w-4" />
-            <span>Unduh CSV Anggota Tetap</span>
+            <Download className="h-3.5 w-3.5" />
+            <span>CSV Tetap</span>
           </button>
         </div>
 
-        <div className="kukang-card rounded-2xl p-5 flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-stone-400">Absensi Anggota Magang</p>
-              <p className="mt-1 font-heading text-2xl font-bold text-amber-400">
-                {internshipCount} <span className="text-xs font-normal text-stone-400">rekaman</span>
-              </p>
-            </div>
+        <div className="kukang-card rounded-2xl p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <div className="rounded-xl border border-amber-500/30 bg-amber-950/50 p-2.5 text-amber-400">
               <GraduationCap className="h-5 w-5" />
             </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => triggerDownload("internship")}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/40 py-2.5 text-xs font-bold text-amber-300 hover:bg-amber-900/50"
-          >
-            <Download className="h-4 w-4" />
-            <span>Unduh CSV Anggota Magang</span>
-          </button>
-        </div>
-
-        <div className="kukang-card rounded-2xl p-5 flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-stone-400">Total Gabungan</p>
-              <p className="mt-1 font-heading text-2xl font-bold text-white">
-                {rows.length} <span className="text-xs font-normal text-stone-400">rekaman</span>
-              </p>
-            </div>
-            <div className="rounded-xl border border-[#C89D3C]/40 bg-[#1B0E10] p-2.5 text-[#E5B94C]">
-              <Users className="h-5 w-5" />
+              <p className="text-xs font-bold text-white">CSV Anggota Magang</p>
+              <p className="text-[11px] text-stone-400">{internshipCount} rekaman kehadiran</p>
             </div>
           </div>
           <button
             type="button"
-            onClick={() => triggerDownload("all")}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#9E0B0B] to-[#C81E1E] py-2.5 text-xs font-bold text-white hover:brightness-110"
+            onClick={() => triggerCsvDownload("internship")}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-amber-500/40 bg-amber-950/40 px-3.5 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-900/50"
           >
-            <FileSpreadsheet className="h-4 w-4" />
-            <span>Unduh CSV Gabungan</span>
+            <Download className="h-3.5 w-3.5" />
+            <span>CSV Magang</span>
           </button>
         </div>
       </div>
@@ -217,7 +306,7 @@ export default function ReportsPage() {
       <div className="kukang-card rounded-2xl p-5 space-y-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-white">
           <Filter className="h-4 w-4 text-[#E5B94C]" />
-          <span>Filter Data & Pratinjau CSV</span>
+          <span>Filter Rentang Waktu & Kegiatan</span>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
@@ -280,28 +369,9 @@ export default function ReportsPage() {
             />
           </div>
         </div>
-
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => triggerDownload(membership)}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#9E0B0B] via-[#B91C1C] to-[#C89D3C] px-5 py-2.5 text-xs font-bold text-white hover:brightness-110"
-          >
-            <Download className="h-4 w-4" />
-            <span>
-              Download CSV (
-              {membership === "active"
-                ? "Anggota Tetap"
-                : membership === "internship"
-                ? "Anggota Magang"
-                : "Semua Anggota"}
-              )
-            </span>
-          </button>
-        </div>
       </div>
 
-      {/* Tabel Pratinjau */}
+      {/* Tabel Data Absensi + Tombol Hapus */}
       <div className="kukang-card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -313,18 +383,19 @@ export default function ReportsPage() {
                 <th className="px-4 py-3 font-semibold">Divisi / Bagian</th>
                 <th className="px-4 py-3 font-semibold">Kegiatan</th>
                 <th className="px-4 py-3 font-semibold">Waktu Check-In</th>
+                {isAdmin && <th className="px-4 py-3 text-right font-semibold">Aksi</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#3B181A]/60 text-stone-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-stone-400">
+                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-stone-400">
                     Memuat data absensi...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-stone-400">
+                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-8 text-center text-stone-400">
                     Tidak ada data absensi untuk filter yang dipilih.
                   </td>
                 </tr>
@@ -364,6 +435,19 @@ export default function ReportsPage() {
                       <td className="px-4 py-3 text-stone-400">
                         {formatJakartaDateTime(row.check_in_time)}
                       </td>
+                      {isAdmin && (
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(row)}
+                            title="Hapus Data Absensi Ini"
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 bg-red-950/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-300 hover:bg-red-900/70 hover:text-white"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
@@ -372,6 +456,65 @@ export default function ReportsPage() {
           </table>
         </div>
       </div>
+
+      {/* Modal Konfirmasi Hapus Absensi */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="kukang-card w-full max-w-md rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#3B181A] pb-3">
+              <div className="flex items-center gap-2 text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+                <h3 className="font-heading text-base font-bold text-white">
+                  Hapus Data Absensi?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-lg p-1 text-stone-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs text-stone-300">
+              <p>
+                Anda akan menghapus kehadiran{" "}
+                <strong className="text-[#F5D06F]">
+                  {deleteTarget.members?.full_name || "Anggota"}
+                </strong>{" "}
+                ({deleteTarget.members?.nim || "-"}) pada kegiatan{" "}
+                <strong className="text-white">
+                  {deleteTarget.events?.title || "-"}
+                </strong>.
+              </p>
+              <p className="rounded-xl border border-amber-500/30 bg-amber-950/40 p-3 text-amber-200">
+                Setelah dihapus, anggota tersebut dapat melakukan scan QR check-in ulang jika diperlukan.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="rounded-xl border border-[#4A2022] px-4 py-2 text-xs font-medium text-stone-300 hover:bg-[#1E0E10]"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteAttendance}
+                disabled={deleting}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#9E0B0B] to-[#DC2626] px-4 py-2 text-xs font-bold text-white hover:brightness-110 disabled:opacity-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{deleting ? "Menghapus..." : "Ya, Hapus Absensi"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
