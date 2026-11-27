@@ -25,19 +25,28 @@ function NewContributionForm() {
   const preselectedEventId = searchParams.get("eventId") || "";
 
   const [events, setEvents] = useState<KukangEvent[]>([]);
-  const [eventId, setEventId] = useState(preselectedEventId);
-  const [roleInEvent, setRoleInEvent] = useState("");
-  const [category, setCategory] = useState<ContributionCategory>(
-    "Technical Development"
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [eventId, setEventId] = useState(preselectedEventId);
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [roleInEvent, setRoleInEvent] = useState("");
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [category, setCategory] = useState<ContributionCategory>(
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n    "Technical Development"
   );
   const [workDescription, setWorkDescription] = useState("");
-  const [workOutput, setWorkOutput] = useState("");
-  const [gdriveLink, setGdriveLink] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [workOutput, setWorkOutput] = useState("");
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [gdriveLink, setGdriveLink] = useState("");
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [files, setFiles] = useState<File[]>([]);
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [submitting, setSubmitting] = useState(false);
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [error, setError] = useState<string | null>(null);
+  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n
   useEffect(() => {
+    supabase
+      .from("divisions")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          setDivisionsList(data);
+        }
+      });
     async function fetchEvents() {
       const supabase = createClient();
       const { data } = await supabase
