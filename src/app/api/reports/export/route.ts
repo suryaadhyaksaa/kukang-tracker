@@ -4,7 +4,12 @@ import { createAdminSupabase } from "@/lib/supabase/admin";
 
 function escapeCsvCell(value: unknown): string {
   const str = value === null || value === undefined ? "" : String(value);
-  if (str.includes('"') || str.includes(",") || str.includes("\n") || str.includes("\r")) {
+  if (
+    str.includes('"') ||
+    str.includes(";") ||
+    str.includes("\n") ||
+    str.includes("\r")
+  ) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -14,15 +19,17 @@ function formatWibDateTime(isoString?: string | null): string {
   if (!isoString) return "-";
   try {
     const date = new Date(isoString);
-    return new Intl.DateTimeFormat("id-ID", {
-      timeZone: "Asia/Jakarta",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    }).format(date) + " WIB";
+    return (
+      new Intl.DateTimeFormat("id-ID", {
+        timeZone: "Asia/Jakarta",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(date) + " WIB"
+    );
   } catch {
     return isoString;
   }
@@ -65,7 +72,7 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const membershipFilter = searchParams.get("membership") || "all"; // all | active | internship
+    const membershipFilter = searchParams.get("membership") || "all";
     const eventIdFilter = searchParams.get("eventId") || "";
     const startDate = searchParams.get("startDate") || "";
     const endDate = searchParams.get("endDate") || "";
@@ -143,7 +150,8 @@ export async function GET(request: Request) {
       "Status Kehadiran",
     ];
 
-    const csvLines = [headers.map(escapeCsvCell).join(",")];
+    // Baris pertama "sep=;" memberi tahu Microsoft Excel agar otomatis membagi kolom berdasarkan ";"
+    const csvLines = ["sep=;", headers.map(escapeCsvCell).join(";")];
 
     filtered.forEach((row: Record<string, unknown>, idx: number) => {
       const member = row.members as Record<string, unknown> | null;
@@ -168,7 +176,7 @@ export async function GET(request: Request) {
         String(row.status || "hadir").toUpperCase(),
       ];
 
-      csvLines.push(line.map(escapeCsvCell).join(","));
+      csvLines.push(line.map(escapeCsvCell).join(";"));
     });
 
     const today = new Date().toISOString().slice(0, 10);
@@ -180,9 +188,9 @@ export async function GET(request: Request) {
         : "semua-anggota";
 
     const filename = `absensi-kukang-ev-${suffix}-${today}.csv`;
-    const csvWithBom = "\uFEFF" + csvLines.join("\r\n");
+    const csvContent = csvLines.join("\r\n");
 
-    return new NextResponse(csvWithBom, {
+    return new NextResponse(csvContent, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
