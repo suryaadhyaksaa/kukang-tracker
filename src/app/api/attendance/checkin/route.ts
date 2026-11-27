@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (member.membership_status !== "active") {
+    if ((String(member.membership_status) !== "active" && String(member.membership_status) !== "internship")) {
       return NextResponse.json(
         { error: "Status keanggotaan Anda tidak aktif." },
         { status: 403 }
@@ -116,6 +116,21 @@ export async function POST(request: Request) {
     }
 
     // 4. Cek Duplikasi Kehadiran
+        const memberStatus = String(member?.membership_status || "active").toLowerCase();
+    const targetMembership = String((event as Record<string, unknown>)?.target_membership || "all").toLowerCase();
+    if (targetMembership === "active" && memberStatus !== "active") {
+      return NextResponse.json(
+        { error: "Kegiatan ini khusus untuk Anggota Tetap / Aktif KUKANG EV." },
+        { status: 403 }
+      );
+    }
+    if (targetMembership === "internship" && memberStatus !== "internship") {
+      return NextResponse.json(
+        { error: "Kegiatan ini khusus untuk Anggota Magang / Internship KUKANG EV." },
+        { status: 403 }
+      );
+    }
+
     const { data: existingAttendance } = await adminDb
       .from("attendance")
       .select("id, check_in_time")
@@ -146,6 +161,7 @@ export async function POST(request: Request) {
       .insert({
         member_id: member.id,
         event_id: event.id,
+        member_status_snapshot: member?.membership_status || "active",
         nim_snapshot: member.nim,
         member_name_snapshot: member.full_name,
         position_snapshot: member.position,
@@ -181,6 +197,7 @@ export async function POST(request: Request) {
       description: `${member.full_name} (${member.nim}) melakukan check-in pada kegiatan "${event.title}" (${serverNow.time})`,
       metadata: {
         event_id: event.id,
+        member_status_snapshot: member?.membership_status || "active",
         nim: member.nim,
         status: attendanceStatus,
       },
