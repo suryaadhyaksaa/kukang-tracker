@@ -39,17 +39,16 @@ export async function POST(request: Request) {
 
     let { data: member } = await adminDb
       .from("members")
-      .select("*")
+      .select("*, divisions(name)")
       .eq("profile_id", user.id)
       .maybeSingle();
 
-    // Jika akun belum tertaut di tabel members, tautkan / buat otomatis dari profil
     if (!member) {
       const nimFromProfile = profile?.nim || user.user_metadata?.nim || null;
       if (nimFromProfile) {
         const { data: existingByNim } = await adminDb
           .from("members")
-          .select("*")
+          .select("*, divisions(name)")
           .eq("nim", String(nimFromProfile))
           .maybeSingle();
 
@@ -58,7 +57,7 @@ export async function POST(request: Request) {
             .from("members")
             .update({ profile_id: user.id })
             .eq("id", existingByNim.id)
-            .select("*")
+            .select("*, divisions(name)")
             .single();
           member = linked || existingByNim;
         }
@@ -85,7 +84,7 @@ export async function POST(request: Request) {
             phone: profile?.phone || user.user_metadata?.phone || null,
             membership_status: initialStatus,
           })
-          .select("*")
+          .select("*, divisions(name)")
           .single();
 
         if (createMemberErr || !createdMember) {
@@ -98,7 +97,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Pastikan status keanggotaan otomatis aktif / internship (tidak pernah kosong)
+    // 2. Pastikan status keanggotaan aktif / internship
     let memberStatus = String(member.membership_status || "").toLowerCase();
     if (!memberStatus || memberStatus === "inactive") {
       memberStatus =
@@ -175,32 +174,55 @@ export async function POST(request: Request) {
       });
     }
 
-    // 6. Simpan otomatis data absensi ke Supabase
+    // 6. Simpan data absensi beserta nim_snapshot & member_status_snapshot
     const nowIso = new Date().toISOString();
-    let { data: inserted, error: insertErr } = await adminDb
-      .from("attendance")
-      .insert({
-        event_id: event.id,
-        member_id: member.id,
-        check_in_time: nowIso,
-        member_status_snapshot: memberStatus,
-      })
-      .select("*")
-      .single();
+    const divisionObj = member.divisions as { name?: string } | null;
+    const resolvedNim = String(member.nim || profile?.nim || "-");
+    const resolvedName = String(member.full_name || profile?.full_name || "Anggota");
+    const resolvedDivision = String(divisionObj?.name || "-");
 
-    // Fallback otomatis jika kolom snapshot belum ada di skema lama
-    if (insertErr && insertErr.message?.includes("member_status_snapshot")) {
-      const retry = await adminDb
+    const insertPayload: Record<string, unknown> = {
+      event_id: event.id,
+      member_id: member.id,
+      check_in_time: nowIso,
+      nim_snapshot: resolvedNim,
+      member_status_snapshot: memberStatus,
+    };
+
+    let inserted = null;
+    let insertErr = null;
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const res = await adminDb
         .from("attendance")
-        .insert({
-          event_id: event.id,
-          member_id: member.id,
-          check_in_time: nowIso,
-        })
+        .insert(insertPayload)
         .select("*")
         .single();
-      inserted = retry.data;
-      insertErr = retry.error;
+
+      inserted = res.data;
+      insertErr = res.error;
+
+      if (!insertErr) break;
+
+      // Jika ada kolom opsional yang belum ada di tabel, hapus dari payload lalu coba lagi
+      const missingColMatch = insertErr.message?.match(/column "([^"]+)" of relation "attendance" does not exist/i);
+      if (missingColMatch) {
+        delete insertPayload[missingColMatch[1]];
+        continue;
+      }
+
+      // Jika ada kolom snapshot NOT NULL lain di tabel, isi otomatis lalu coba lagi
+      const nullColMatch = insertErr.message?.match(/null value in column "([^"]+)" of relation "attendance"/i);
+      if (nullColMatch) {
+        const col = nullColMatch[1];
+        if (col.includes("nim")) insertPayload[col] = resolvedNim;
+        else if (col.includes("name")) insertPayload[col] = resolvedName;
+        else if (col.includes("division")) insertPayload[col] = resolvedDivision;
+        else insertPayload[col] = "-";
+        continue;
+      }
+
+      break;
     }
 
     if (insertErr) {
@@ -210,15 +232,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // 7. Catat riwayat aktivitas secara otomatis (opsional, non-blocking)
+    // 7. Catat riwayat aktivitas secara otomatis
     await adminDb
       .from("activity_logs")
       .insert({
         user_id: user.id,
         action: "ATTENDANCE_CHECKIN",
-        description: `${member.full_name} (${
-          memberStatus === "internship" ? "Magang" : "Anggota Tetap"
-        }) check-in pada ${event.title}`,
+        description: `${resolvedName} (${resolvedNim}) melakukan check-in pada kegiatan "${event.title}"`,
       })
       .then(() => null, () => null);
 
