@@ -222,7 +222,7 @@ export async function POST(request: Request) {
         if (col.includes("nim")) insertPayload[col] = resolvedNim;
         else if (col.includes("name")) insertPayload[col] = resolvedName;
         else if (col.includes("division")) insertPayload[col] = resolvedDivision; else if (col.includes("title")) insertPayload[col] = String(event.title || "-"); else if (col.includes("date")) insertPayload[col] = String(event.event_date || nowIso.slice(0, 10));
-        else insertPayload[col] = "-";
+        else if (col.includes("date")) insertPayload[col] = String(event.event_date || nowIso.slice(0, 10)).slice(0, 10); else if (col.includes("time") || col.endsWith("_at")) insertPayload[col] = nowIso; else insertPayload[col] = "-";
         continue;
       }
 
