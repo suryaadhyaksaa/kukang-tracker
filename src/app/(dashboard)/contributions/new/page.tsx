@@ -4,11 +4,12 @@ import React, { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { UploadCloud, Send, AlertCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  CONTRIBUTION_CATEGORIES,
-  type ContributionCategory,
-  type KukangEvent,
-} from "@/types/database";
+import type { KukangEvent } from "@/types/database";
+
+interface DivisionOption {
+  id: string;
+  name: string;
+}
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -25,47 +26,55 @@ function NewContributionForm() {
   const preselectedEventId = searchParams.get("eventId") || "";
 
   const [events, setEvents] = useState<KukangEvent[]>([]);
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [eventId, setEventId] = useState(preselectedEventId);
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [roleInEvent, setRoleInEvent] = useState("");
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [category, setCategory] = useState<ContributionCategory>(
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n    "Technical Development"
-  );
+  const [divisionsList, setDivisionsList] = useState<DivisionOption[]>([]);
+  const [eventId, setEventId] = useState(preselectedEventId);
+  const [roleInEvent, setRoleInEvent] = useState("");
+  const [category, setCategory] = useState("");
   const [workDescription, setWorkDescription] = useState("");
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [workOutput, setWorkOutput] = useState("");
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [gdriveLink, setGdriveLink] = useState("");
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [files, setFiles] = useState<File[]>([]);
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [submitting, setSubmitting] = useState(false);
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n  const [error, setError] = useState<string | null>(null);
-  const [divisionsList, setDivisionsList] = useState<{ id: string; name: string }[]>([]);\n
+  const [workOutput, setWorkOutput] = useState("");
+  const [gdriveLink, setGdriveLink] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
-    supabase
-      .from("divisions")
-      .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data }) => {
-        if (data && data.length > 0) {
-          setDivisionsList(data);
-        }
-      });
-    async function fetchEvents() {
+    async function loadInitialData() {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("events")
-        .select("*")
-        .order("event_date", { ascending: false });
-      setEvents((data as KukangEvent[]) || []);
-      if (!preselectedEventId && data && data.length > 0) {
-        setEventId(data[0].id);
+
+      const [{ data: evData }, { data: divData }] = await Promise.all([
+        supabase
+          .from("events")
+          .select("*")
+          .order("event_date", { ascending: false }),
+        supabase
+          .from("divisions")
+          .select("id, name")
+          .order("name", { ascending: true }),
+      ]);
+
+      const loadedEvents = (evData as KukangEvent[]) || [];
+      setEvents(loadedEvents);
+      if (!preselectedEventId && loadedEvents.length > 0) {
+        setEventId(loadedEvents[0].id);
+      }
+
+      const loadedDivisions = (divData as DivisionOption[]) || [];
+      setDivisionsList(loadedDivisions);
+      if (loadedDivisions.length > 0) {
+        setCategory(loadedDivisions[0].name);
       }
     }
-    fetchEvents();
+
+    loadInitialData();
   }, [preselectedEventId]);
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files || []);
     for (const f of selected) {
       if (!ALLOWED_MIME_TYPES.includes(f.type)) {
-        setError(`Format file ${f.name} tidak didukung. Gunakan JPG, PNG, WEBP, atau MP4.`);
+        setError(
+          `Format file ${f.name} tidak didukung. Gunakan JPG, PNG, WEBP, atau MP4.`
+        );
         return;
       }
       if (f.size > MAX_FILE_BYTES) {
@@ -114,6 +123,8 @@ function NewContributionForm() {
         });
       }
 
+      const matchedDivision = divisionsList.find((d) => d.name === category);
+
       const res = await fetch("/api/contributions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -121,6 +132,7 @@ function NewContributionForm() {
           event_id: eventId,
           role_in_event: roleInEvent,
           category,
+          division_id: matchedDivision?.id || null,
           work_description: workDescription,
           work_output: workOutput,
           gdrive_link: gdriveLink || null,
@@ -183,18 +195,17 @@ function NewContributionForm() {
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-stone-300">
-            Kategori Kontribusi
+            Divisi / Kategori Kontribusi
           </label>
           <select
+            required
             value={category}
-            onChange={(e) =>
-              setCategory(e.target.value as ContributionCategory)
-            }
+            onChange={(e) => setCategory(e.target.value)}
             className="w-full rounded-xl border border-[#4A2022] bg-[#090607] px-3 py-2.5 text-xs text-white"
           >
-            {CONTRIBUTION_CATEGORIES.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
+            {divisionsList.map((div) => (
+              <option key={div.id} value={div.name}>
+                {div.name}
               </option>
             ))}
           </select>

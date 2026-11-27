@@ -5,16 +5,7 @@ export type AttendanceStatus = "present" | "late" | "excused";
 export type VerificationStatus = "pending" | "approved" | "rejected";
 export type SyncStatus = "pending" | "synced" | "failed" | "unconfigured";
 
-export type ContributionCategory =
-  | "Technical Development"
-  | "Hardware & Electrical"
-  | "Software Development"
-  | "Administration"
-  | "Sponsorship"
-  | "Public Relations"
-  | "Documentation"
-  | "Event Management"
-  | "Other";
+export type ContributionCategory = string;
 
 export const CONTRIBUTION_CATEGORIES: ContributionCategory[] = [
   "Technical Development",

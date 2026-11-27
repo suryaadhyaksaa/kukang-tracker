@@ -35,9 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!CONTRIBUTION_CATEGORIES.includes(category)) {
-      return NextResponse.json(
-        { error: "Kategori kontribusi tidak valid." },
+    if (!category || String(category).trim().length === 0) { return NextResponse.json({ error: "Divisi / kategori kontribusi wajib dipilih." }, { status: 400 }); },
         { status: 400 }
       );
     }
